@@ -1,6 +1,10 @@
 package src
 
-import "github.com/oklog/ulid/v2"
+import (
+	"io"
+
+	"github.com/oklog/ulid/v2"
+)
 
 // Message ...
 type Message struct {
@@ -9,16 +13,32 @@ type Message struct {
 }
 
 // NewMessage ...
-func NewMessage(rs RandomStringer, data []byte) *Message {
+func NewMessage(rs RandomStringer, r io.Reader) (*Message, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Message{
 		ID:   rs.Generate(),
 		Data: data,
-	}
+	}, nil
 }
 
 // IsEmpty ...
 func (m Message) IsEmpty() bool {
 	return m.Data == nil
+}
+
+// Bytes ...
+func (m Message) Bytes() []byte {
+	const idSize = 26 // ulid size
+	const headerSize = idSize
+
+	headerBuf := [headerSize]byte{}
+	copy(headerBuf[0:], []byte(m.ID))
+
+	return append(headerBuf[:], m.Data...)
 }
 
 // RandomStringer ...

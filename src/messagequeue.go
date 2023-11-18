@@ -14,7 +14,7 @@ func NewMessageQueue() MessageQueue {
 	return &messageQueue{
 		returnToQueueTime: 1 * time.Minute,
 		q:                 NewQueue[Message](),
-		kv:                NewKVStore[Message](),
+		kv:                NewKVStore[string, Message](),
 	}
 }
 
@@ -22,7 +22,7 @@ func NewMessageQueue() MessageQueue {
 type messageQueue struct {
 	returnToQueueTime time.Duration
 	q                 Queue[Message]
-	kv                KVStore[Message]
+	kv                KVStore[string, Message]
 }
 
 // Publish ...

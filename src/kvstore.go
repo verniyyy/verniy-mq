@@ -6,26 +6,27 @@ import (
 )
 
 // KVStore ...
-type KVStore[Value any] interface {
+type KVStore[Key, Value any] interface {
 	Init()
 	Size() int64
-	GetAndDelete(key string) (Value, error)
-	Store(key string, value Value) error
-	Delete(key string) error
+	Get(Key) (Value, error)
+	GetAndDelete(Key) (Value, error)
+	Store(Key, Value) error
+	Delete(Key) error
 }
 
 // NewKVStore ...
-func NewKVStore[Value any]() KVStore[Value] {
-	return &kvStore[Value]{}
+func NewKVStore[Key, Value any]() KVStore[Key, Value] {
+	return &kvStore[Key, Value]{}
 }
 
 // kvStore ...
-type kvStore[T any] struct {
+type kvStore[K, V any] struct {
 	sm sync.Map
 }
 
 // Init is erase map
-func (s *kvStore[T]) Init() {
+func (s *kvStore[K, V]) Init() {
 	s.sm.Range(func(k, _ any) bool {
 		s.sm.Delete(k)
 		return true
@@ -33,9 +34,9 @@ func (s *kvStore[T]) Init() {
 }
 
 // Size is the length of kvStore
-func (s *kvStore[T]) Size() int64 {
+func (s *kvStore[K, V]) Size() int64 {
 	var i int64
-	s.sm.Range(func(k, v interface{}) bool {
+	s.sm.Range(func(k, v any) bool {
 		i++
 		return true
 	})
@@ -43,19 +44,25 @@ func (s *kvStore[T]) Size() int64 {
 }
 
 // Get ...
-func (s *kvStore[T]) GetAndDelete(k string) (T, error) {
+func (s *kvStore[K, V]) Get(k K) (V, error) {
+	v, ok := s.sm.Load(k)
+	return v.(V), fmt.Errorf("%v", ok)
+}
+
+// GetAndDelete ...
+func (s *kvStore[K, V]) GetAndDelete(k K) (V, error) {
 	v, ok := s.sm.LoadAndDelete(k)
-	return v.(T), fmt.Errorf("%v", ok)
+	return v.(V), fmt.Errorf("%v", ok)
 }
 
 // Store ...
-func (s *kvStore[T]) Store(k string, v T) error {
+func (s *kvStore[K, V]) Store(k K, v V) error {
 	s.sm.Store(k, v)
 	return nil
 }
 
 // Delete ...
-func (s *kvStore[T]) Delete(k string) error {
+func (s *kvStore[K, V]) Delete(k K) error {
 	s.sm.Delete(k)
 	return nil
 }

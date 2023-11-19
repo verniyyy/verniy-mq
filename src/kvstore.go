@@ -1,9 +1,11 @@
 package src
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 )
+
+var ErrNotFound = errors.New("not found")
 
 // KVStore ...
 type KVStore[Key, Value any] interface {
@@ -46,13 +48,21 @@ func (s *kvStore[K, V]) Size() int64 {
 // Get ...
 func (s *kvStore[K, V]) Get(k K) (V, error) {
 	v, ok := s.sm.Load(k)
-	return v.(V), fmt.Errorf("%v", ok)
+	if !ok {
+		return v.(V), ErrNotFound
+	}
+
+	return v.(V), nil
 }
 
 // GetAndDelete ...
 func (s *kvStore[K, V]) GetAndDelete(k K) (V, error) {
 	v, ok := s.sm.LoadAndDelete(k)
-	return v.(V), fmt.Errorf("%v", ok)
+	if !ok {
+		return v.(V), ErrNotFound
+	}
+
+	return v.(V), nil
 }
 
 // Store ...

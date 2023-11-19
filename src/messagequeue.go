@@ -46,6 +46,9 @@ func (mq *messageQueue) Consume() (*Message, error) {
 
 	time.AfterFunc(mq.returnToQueueTime, func() {
 		if err := mq.makeAvailable(m.ID); err != nil {
+			if err == ErrNotFound {
+				return
+			}
 			panic(err)
 		}
 	})

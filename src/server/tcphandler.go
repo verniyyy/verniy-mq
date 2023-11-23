@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	_ = iota
+	PingCMD = iota
 	CreateQueueCMD
 	DeleteQueueCMD
 	PublishCMD
@@ -60,6 +60,9 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 	app := src.NewMessageQueueApplication(h.mqManager)
 	if err := func() error {
 		switch header.Command {
+		case PingCMD:
+			log.Println("ping")
+			return nil
 		case CreateQueueCMD:
 			return app.CreateQueue(context.Background(), string(header.AccountID[:]), string(header.QueueName[:]))
 		case DeleteQueueCMD:
@@ -133,9 +136,9 @@ func readHeader(r io.Reader) (HeaderField, error) {
 	if err != nil && err != io.EOF {
 		return HeaderField{}, err
 	}
-	if received != headerFieldSize {
-		return HeaderField{}, fmt.Errorf("invalid buf size: %v", received)
-	}
+	// if received != headerFieldSize {
+	// 	return HeaderField{}, fmt.Errorf("invalid buf size: %v", received)
+	// }
 
 	var headerField HeaderField
 	if err := binary.Read(bytes.NewReader(buf), binary.BigEndian, &headerField); err != nil {

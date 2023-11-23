@@ -12,6 +12,7 @@ type KVStore[Key, Value any] interface {
 	Init()
 	Size() int64
 	Get(Key) (Value, error)
+	GetAll() ([]Key, []Value, error)
 	GetAndDelete(Key) (Value, error)
 	Store(Key, Value) error
 	Delete(Key) error
@@ -53,6 +54,18 @@ func (s *kvStore[K, V]) Get(k K) (V, error) {
 	}
 
 	return v.(V), nil
+}
+
+// GetAll ...
+func (s *kvStore[K, V]) GetAll() ([]K, []V, error) {
+	keys := make([]K, 0, 100)
+	values := make([]V, 0, 100)
+	s.sm.Range(func(k, v any) bool {
+		keys = append(keys, k.(K))
+		values = append(values, v.(V))
+		return true
+	})
+	return keys, values, nil
 }
 
 // GetAndDelete ...

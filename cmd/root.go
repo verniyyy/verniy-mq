@@ -6,10 +6,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/verniyyy/verniy-mq/src"
+	"github.com/verniyyy/verniy-mq/src/server"
 )
 
 var cfgFile string
@@ -27,7 +29,10 @@ to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Run: func(cmd *cobra.Command, args []string) {
-		src.NewServer("localhost", 9000).Run()
+		mqm := src.NewMQManager()
+		go server.NewTCPServer("localhost", 9000, mqm).Run()
+		go server.NewHTTPServer("localhost", 8000, mqm).Run()
+		runtime.Goexit()
 	},
 }
 

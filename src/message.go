@@ -32,14 +32,15 @@ func (m Message) IsEmpty() bool {
 
 // Bytes ...
 func (m Message) Bytes() []byte {
-	const idSize = 26 // ulid size
-	const headerSize = idSize
+	const headerSize = MessageIDSize
 
 	headerBuf := [headerSize]byte{}
 	copy(headerBuf[0:], []byte(m.ID))
 
 	return append(headerBuf[:], m.Data...)
 }
+
+const MessageIDSize = 26
 
 // RandomStringer ...
 type RandomStringer interface {

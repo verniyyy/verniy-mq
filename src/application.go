@@ -11,30 +11,51 @@ type MessageQueueApplication struct {
 }
 
 // NewMessageQueueApplication ...
-func NewMessageQueueApplication() MessageQueueApplication {
+func NewMessageQueueApplication(mqm MQManager) MessageQueueApplication {
 	return MessageQueueApplication{
-		mqManager: NewMQManager(),
+		mqManager: mqm,
 	}
 }
 
 // CreateQueue ...
-func (a MessageQueueApplication) CreateQueue(ctx context.Context, name string) error {
-	return a.mqManager.CreateQueue("", name)
+func (a MessageQueueApplication) CreateQueue(ctx context.Context, userID, name string) error {
+	return a.mqManager.CreateQueue(userID, name)
+}
+
+// ListQueues ...
+func (a MessageQueueApplication) ListQueues(ctx context.Context, userID string) (ListQueuesOutput, error) {
+	mqList, err := a.mqManager.ListQueues(userID)
+	if err != nil {
+		return ListQueuesOutput{}, err
+	}
+
+	out := ListQueuesOutput{
+		Queues: make([]struct{ name string }, len(mqList)),
+	}
+	for i, q := range mqList {
+		out.Queues[i].name = q.Name()
+	}
+
+	return out, nil
+}
+
+type ListQueuesOutput struct {
+	Queues []struct{ name string } `json:"queues"`
 }
 
 // DeleteQueue ...
-func (a MessageQueueApplication) DeleteQueue(ctx context.Context, name string) error {
-	return a.mqManager.DeleteQueue("", name)
+func (a MessageQueueApplication) DeleteQueue(ctx context.Context, userID, name string) error {
+	return a.mqManager.DeleteQueue(userID, name)
 }
 
 // Publish ...
-func (a MessageQueueApplication) Publish(ctx context.Context, name string, r io.Reader) error {
+func (a MessageQueueApplication) Publish(ctx context.Context, userID, name string, r io.Reader) error {
 	m, err := NewMessage(ULIDGenerator, r)
 	if err != nil {
 		return err
 	}
 
-	mq, err := a.mqManager.GetQueue("", name)
+	mq, err := a.mqManager.GetQueue(userID, name)
 	if err != nil {
 		return err
 	}
@@ -43,8 +64,8 @@ func (a MessageQueueApplication) Publish(ctx context.Context, name string, r io.
 }
 
 // Consume ...
-func (a MessageQueueApplication) Consume(ctx context.Context, name string, r io.Reader) (*Message, error) {
-	mq, err := a.mqManager.GetQueue("", name)
+func (a MessageQueueApplication) Consume(ctx context.Context, userID, name string) (*Message, error) {
+	mq, err := a.mqManager.GetQueue(userID, name)
 	if err != nil {
 		return nil, err
 	}
@@ -53,12 +74,11 @@ func (a MessageQueueApplication) Consume(ctx context.Context, name string, r io.
 }
 
 // Delete ...
-func (a MessageQueueApplication) Delete(ctx context.Context, name string) error {
-	id := ""
-	mq, err := a.mqManager.GetQueue(id, name)
+func (a MessageQueueApplication) Delete(ctx context.Context, userID, name, messageID string) error {
+	mq, err := a.mqManager.GetQueue(userID, name)
 	if err != nil {
 		return err
 	}
 
-	return mq.Delete(id)
+	return mq.Delete(messageID)
 }

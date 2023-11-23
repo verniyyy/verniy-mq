@@ -4,14 +4,16 @@ import "time"
 
 // MessageQueue ...
 type MessageQueue interface {
+	Name() string
 	Publish(*Message) error
 	Consume() (*Message, error)
 	Delete(id string) error
 }
 
 // NewMessageQueue ...
-func NewMessageQueue() MessageQueue {
+func NewMessageQueue(name string) MessageQueue {
 	return &messageQueue{
+		name:              name,
 		returnToQueueTime: 1 * time.Minute,
 		q:                 NewQueue[Message](),
 		kv:                NewKVStore[string, Message](),
@@ -20,9 +22,15 @@ func NewMessageQueue() MessageQueue {
 
 // messageQueue ...
 type messageQueue struct {
+	name              string
 	returnToQueueTime time.Duration
 	q                 Queue[Message]
 	kv                KVStore[string, Message]
+}
+
+// Name ...
+func (mq *messageQueue) Name() string {
+	return mq.name
 }
 
 // Publish ...

@@ -16,6 +16,7 @@ import (
 
 const (
 	_ = iota
+	QuitCMD
 	PingCMD
 	CreateQueueCMD
 	DeleteQueueCMD
@@ -62,6 +63,9 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 		if err != nil {
 			log.Println(err)
 			return
+		}
+		if header.Command == QuitCMD {
+			break
 		}
 
 		log.Printf("header: %+v\n", header)

@@ -1,11 +1,5 @@
 package src
 
-import (
-	"io"
-
-	"github.com/oklog/ulid/v2"
-)
-
 // Message ...
 type Message struct {
 	ID   string
@@ -13,17 +7,15 @@ type Message struct {
 }
 
 // NewMessage ...
-func NewMessage(rs RandomStringer, r io.Reader) (*Message, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-
+func NewMessage(rs RandomStringer, data []byte) (*Message, error) {
 	return &Message{
-		ID:   rs.Generate(),
+		ID:   rs(),
 		Data: data,
 	}, nil
 }
+
+// RandomStringer ...
+type RandomStringer func() string
 
 // IsEmpty ...
 func (m Message) IsEmpty() bool {
@@ -40,20 +32,5 @@ func (m Message) Bytes() []byte {
 	return append(headerBuf[:], m.Data...)
 }
 
+// MessageIDSize ...
 const MessageIDSize = 26
-
-// RandomStringer ...
-type RandomStringer interface {
-	Generate() string
-}
-
-var ULIDGenerator = ulidGenerator{}
-var _ RandomStringer = ulidGenerator{}
-
-// ULIDGenerator ...
-type ulidGenerator struct{}
-
-// Generate() ...
-func (ulidGenerator) Generate() string {
-	return ulid.Make().String()
-}

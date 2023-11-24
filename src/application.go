@@ -2,7 +2,8 @@ package src
 
 import (
 	"context"
-	"io"
+
+	"github.com/verniyyy/verniy-mq/src/util"
 )
 
 // MessageQueueApplication ...
@@ -49,8 +50,8 @@ func (a MessageQueueApplication) DeleteQueue(ctx context.Context, userID, name s
 }
 
 // Publish ...
-func (a MessageQueueApplication) Publish(ctx context.Context, userID, name string, r io.Reader) error {
-	m, err := NewMessage(ULIDGenerator, r)
+func (a MessageQueueApplication) Publish(ctx context.Context, userID, name string, data []byte) error {
+	m, err := NewMessage(util.GenULID, data)
 	if err != nil {
 		return err
 	}

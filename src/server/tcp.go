@@ -32,7 +32,7 @@ func (s tcpServer) Run() {
 	}
 	defer listener.Close()
 
-	log.Printf("listening on %s:%s", s.host, s.port)
+	log.Printf("listening on %s:%s by tcp", s.host, s.port)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {

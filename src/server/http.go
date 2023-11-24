@@ -46,7 +46,7 @@ type httpServer struct {
 // Run ...
 func (s httpServer) Run() {
 	addr := fmt.Sprintf("%s:%s", s.host, s.port)
-	log.Printf("listening on %s", addr)
+	log.Printf("listening on %s by http", addr)
 	if err := http.ListenAndServe(addr, s.router); err != nil {
 		log.Printf("Error: %v", err)
 	}

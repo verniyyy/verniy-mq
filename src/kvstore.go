@@ -50,7 +50,8 @@ func (s *kvStore[K, V]) Size() int64 {
 func (s *kvStore[K, V]) Get(k K) (V, error) {
 	v, ok := s.sm.Load(k)
 	if !ok {
-		return v.(V), ErrNotFound
+		var v V
+		return v, ErrNotFound
 	}
 
 	return v.(V), nil

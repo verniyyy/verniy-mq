@@ -16,12 +16,14 @@ type MQManager interface {
 
 // NewMQManager ...
 func NewMQManager() MQManager {
-	return &mqManager{}
+	return &mqManager{
+		mqList: NewKVStore[queueID, MessageQueue](),
+	}
 }
 
 // mqManager ...
 type mqManager struct {
-	mqList KVStore[[]byte, MessageQueue]
+	mqList KVStore[queueID, MessageQueue]
 }
 
 // CreateQueue ...
@@ -84,7 +86,7 @@ func (m *mqManager) DeleteQueue(userID, name string) error {
 }
 
 // queueID ...
-type queueID []byte
+type queueID *[]byte
 
 // newQueueID ...
 func newQueueID(userID, name string) (queueID, error) {
@@ -96,13 +98,14 @@ func newQueueID(userID, name string) (queueID, error) {
 		return nil, err
 	}
 
-	return buf.Bytes(), nil
+	bufBytes := buf.Bytes()
+	return queueID(&bufBytes), nil
 }
 
 // decodeQueueID ...
-func decodeQueueID(buf []byte) (userID, name string, err error) {
+func decodeQueueID(id queueID) (userID, name string, err error) {
 	v := make(map[string]string)
-	if err := gob.NewDecoder(bytes.NewBuffer(buf)).Decode(&v); err != nil {
+	if err := gob.NewDecoder(bytes.NewBuffer(*id)).Decode(&v); err != nil {
 		return "", "", err
 	}
 

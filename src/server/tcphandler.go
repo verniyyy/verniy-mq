@@ -9,6 +9,8 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
+	"strconv"
 
 	"github.com/verniyyy/verniy-mq/src"
 	"github.com/verniyyy/verniy-mq/src/util"
@@ -19,10 +21,17 @@ const (
 	QuitCMD
 	PingCMD
 	CreateQueueCMD
+	ListQueueCMD
 	DeleteQueueCMD
 	PublishCMD
 	ConsumeCMD
 	DeleteCMD
+)
+
+const (
+	_ uint8 = iota
+	OK
+	Error
 )
 
 // TCPHandler ...
@@ -44,25 +53,67 @@ type tcpHandler struct {
 
 // HandleRequest ...
 func (h tcpHandler) HandleRequest(conn net.Conn) {
-	sessID := util.GenULID()
+	connID := util.GenULID()
 	defer func() {
-		log.Printf("connection closed: %v, session %s", conn.RemoteAddr(), sessID)
+		log.Printf("connection closed: %v, connection %s", conn.RemoteAddr(), connID)
 		err := conn.Close()
 		if err != nil {
 			log.Println(err)
 		}
 	}()
-	log.Printf("connection established on %v, session %s", conn.RemoteAddr(), sessID)
+	log.Printf("connection established on %v, connection %s", conn.RemoteAddr(), connID)
 
 	r := bufio.NewReader(conn)
+	w := bufio.NewWriter(conn)
+
+	authField, err := read[AuthField](r, authFieldSize)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	if !auth(authField) {
+		fmt.Printf("authField: %v\n", authField)
+		log.Println("authentication failed")
+		return
+	}
+
+	sessID := NewSessionID(util.GenULID)
+	buf := new(bytes.Buffer)
+	if err := binary.Write(
+		buf,
+		binary.BigEndian,
+		sessID,
+	); err != nil {
+		log.Println(err)
+		return
+	}
+
+	_, err = w.Write(buf.Bytes())
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	if err := w.Flush(); err != nil {
+		log.Println(err)
+		return
+	}
+
+	log.Printf("auth ok session id: %v\n", sessID)
+
 	for {
-		header, err := readHeader(r)
+		header, err := read[HeaderField](r, headerFieldSize)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			log.Println(err)
 			return
+		}
+		if header.SessionID != sessID {
+			log.Println("session id mismatch")
+			log.Printf("header.sessionIDString(): %p\n", []byte(header.String()))
+			log.Printf("sessID.String(): %p\n", []byte(sessID.String()))
+			break
 		}
 		if header.Command == QuitCMD {
 			break
@@ -71,51 +122,108 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 		log.Printf("header: %+v\n", header)
 
 		app := src.NewMessageQueueApplication(h.mqManager)
-		if err := func() error {
+		resData, err := func() ([]byte, error) {
 			switch header.Command {
 			case PingCMD:
 				log.Println("ping")
-				return nil
+				// n, err := w.Write([]byte("pong"))
+				// if err != nil {
+				// 	return NewResponse(Error, nil), err
+				// }
+				// log.Printf("pong write n: %v\n", n)
+				// if err := w.Flush(); err != nil {
+				// 	return NewResponse(Error, nil), err
+				// }
+				return []byte("pong"), nil
 			case CreateQueueCMD:
-				return app.CreateQueue(context.Background(), header.accountIDString(), header.queueNameString())
+				if err := app.CreateQueue(context.Background(), authField.accountIDString(), header.queueNameString()); err != nil {
+					return nil, err
+				}
+				return nil, nil
+			case ListQueueCMD:
+				log.Println("list queue cmd")
+				return nil, nil
 			case DeleteQueueCMD:
-				return app.DeleteQueue(context.Background(), header.accountIDString(), header.queueNameString())
+				if err := app.DeleteQueue(context.Background(), authField.accountIDString(), header.queueNameString()); err != nil {
+					return nil, err
+				}
+				return nil, nil
 			case PublishCMD:
+				// TODO: io.ReadAll は使えないかもしれないので要確認
 				data, err := io.ReadAll(r)
 				if err != nil {
-					return err
+					return nil, err
 				}
-				return app.Publish(context.Background(), header.accountIDString(), header.queueNameString(), data)
+				fmt.Printf("data: %v\n", data)
+				return nil, app.Publish(context.Background(), authField.accountIDString(), header.queueNameString(), data)
 			case ConsumeCMD:
-				m, err := app.Consume(context.Background(), header.accountIDString(), header.queueNameString())
+				m, err := app.Consume(context.Background(), authField.accountIDString(), header.queueNameString())
 				if err != nil {
-					return err
+					return nil, err
 				}
-				conn.Write(m.Bytes())
-				return nil
+				if _, err := w.Write(m.Bytes()); err != nil {
+					return nil, err
+				}
+				if err := w.Flush(); err != nil {
+					return nil, err
+				}
+				return m.Bytes(), nil
 			case DeleteCMD:
 				var id MessageID
 				_, err := r.Read(id[:])
 				if err != nil && err != io.EOF {
-					return err
+					return nil, err
 				}
-				return app.Delete(context.Background(), header.accountIDString(), string(header.QueueName[:]), string(id[:]))
+				return nil, app.Delete(context.Background(), authField.accountIDString(), string(header.QueueName[:]), string(id[:]))
 			default:
 				if header.isBlank() {
-					return nil
+					return nil, nil
 				}
-				return fmt.Errorf("invalid command: %v", header.Command)
+				return nil, fmt.Errorf("invalid command: %v", header.Command)
 			}
-		}(); err != nil {
+		}()
+		res, err := func() ([]byte, error) {
+			if err != nil {
+				log.Printf("error: %v\n", err)
+				return NewResponse(Error, []byte(err.Error())).encode()
+			}
+			return NewResponse(OK, resData).encode()
+		}()
+		if err != nil {
 			log.Printf("error: %v\n", err)
+			continue
 		}
 
-		conn.Write([]byte("Message received.\n"))
+		n, err := w.Write(res)
+		if err != nil {
+			log.Printf("error: %v\n", err)
+		}
+		if err := w.Flush(); err != nil {
+			log.Println(err)
+		}
+		log.Printf("response write n: %v\n", n)
 	}
 }
 
+// SessionID ...
+type SessionID [32]rune
+
+// String ...
+func (sid SessionID) String() string {
+	return string(sid[:])
+}
+
+// SessionIDGenerator ...
+type SessionIDGenerator func() string
+
+// NewSessionID ...
+func NewSessionID(g SessionIDGenerator) SessionID {
+	var sessID SessionID
+	copy(sessID[:], []rune(g()))
+	return sessID
+}
+
 const (
-	accountIDStrSize = 32
 	queueNameStrSize = 128
 	ByteSizeOfRune   = 4
 	headerFieldSize  = accountIDStrSize*ByteSizeOfRune +
@@ -129,31 +237,21 @@ func init() {
 
 // HeaderField ...
 type HeaderField struct {
+	SessionID SessionID
 	Command   uint8
-	AccountID [32]rune
 	QueueName [128]rune
 }
 
 // String implements of fmt.Stringer
 func (h HeaderField) String() string {
-	return fmt.Sprintf("{Command:%d, AccountID:%s, QueueName:%s}",
-		h.Command, h.accountIDString(), h.queueNameString())
+	return fmt.Sprintf("{SessionID:%s, Command:%d, QueueName:%s}",
+		h.SessionID.String(), h.Command, h.queueNameString())
 }
 
 // isBlank ...
 func (h HeaderField) isBlank() bool {
 	var blank HeaderField
 	return h == blank
-}
-
-// accountIDString ...
-func (h HeaderField) accountIDString() string {
-	const accountIDTest = "01HG17X22440GTQW3AS6WHCF0K" // ulid
-	accountID := string(h.AccountID[:])
-	if accountID == "" {
-		return accountIDTest
-	}
-	return accountID
 }
 
 // queueNameString ...
@@ -164,19 +262,118 @@ func (h HeaderField) queueNameString() string {
 // MessageID ...
 type MessageID [src.MessageIDSize]byte
 
-// readHeader ...
-func readHeader(r io.Reader) (HeaderField, error) {
-	buf := make([]byte, headerFieldSize)
+// read ...
+func read[T any](r io.Reader, bufSize int) (T, error) {
+	var v T
+	buf := make([]byte, bufSize)
 	received, err := r.Read(buf)
 	if err != nil {
-		return HeaderField{}, err
+		return v, err
 	}
 
-	var headerField HeaderField
-	if err := binary.Read(bytes.NewReader(buf), binary.BigEndian, &headerField); err != nil {
+	if err := binary.Read(bytes.NewReader(buf), binary.BigEndian, &v); err != nil {
 		log.Printf("received: %v\n", received)
-		return HeaderField{}, err
+		return v, err
 	}
 
-	return headerField, nil
+	return v, nil
+}
+
+// auth ...
+func auth(a AuthField) bool {
+	if disableAuth, _ := strconv.ParseBool(os.Getenv("DISABLE_AUTH")); disableAuth {
+		return true
+	}
+
+	type Users map[string]string
+	users := make(Users)
+	users[accountIDTest] = passwordTest
+
+	if _, ok := users[a.accountIDString()]; !ok {
+		return false
+	}
+	if users[a.accountIDString()] != a.passwordString() {
+		log.Println("invalid password")
+		return false
+	}
+
+	// Check if the username and password are valid
+	// if _, ok := users[a.accountIDString()]; !ok || users[a.accountIDString()] != a.passwordString() {
+	// 	// The username or password is invalid
+	// 	return false
+	// }
+
+	return true
+}
+
+const (
+	accountIDStrSize = 32
+	passwordStrSize  = 64
+	authFieldSize    = accountIDStrSize*ByteSizeOfRune +
+		passwordStrSize*ByteSizeOfRune
+)
+
+const (
+	accountIDTest = "01HG17X22440GTQW3AS6WHCF0K" // ulid
+	passwordTest  = "P@ssw0rd"
+)
+
+// AuthField ...
+type AuthField struct {
+	AccountID [32]rune
+	Password  [64]rune
+}
+
+// String ...
+func (a AuthField) String() string {
+	return fmt.Sprintf("{AccountID:%s, Password:%s}",
+		a.accountIDString(), a.passwordString())
+}
+
+// accountIDString ...
+func (a AuthField) accountIDString() string {
+	accountID := string(a.AccountID[:])
+	if accountID == "" {
+		return accountIDTest
+	}
+	return util.TrimNullChar(accountID)
+}
+
+// passwordString ...
+func (a AuthField) passwordString() string {
+	password := string(a.Password[:])
+	return util.TrimNullChar(password)
+}
+
+// Response ...
+type Response struct {
+	HeaderField struct {
+		Result   uint8
+		DataSize uint32
+	}
+	Data []byte
+}
+
+// NewResponse ...
+func NewResponse(result uint8, data []byte) Response {
+	res := Response{}
+	res.HeaderField.Result = result
+	res.HeaderField.DataSize = uint32(len(data))
+	res.Data = data
+	return res
+}
+
+// encode ...
+func (res Response) encode() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	binary.Write(
+		buf,
+		binary.BigEndian,
+		res.HeaderField,
+	)
+	if res.Data == nil {
+		return buf.Bytes(), nil
+	}
+
+	return append(buf.Bytes(), res.Data...), nil
 }

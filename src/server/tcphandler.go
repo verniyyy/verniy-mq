@@ -125,17 +125,10 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 		resData, err := func() ([]byte, error) {
 			switch header.Command {
 			case PingCMD:
-				log.Println("ping")
-				// n, err := w.Write([]byte("pong"))
-				// if err != nil {
-				// 	return NewResponse(Error, nil), err
-				// }
-				// log.Printf("pong write n: %v\n", n)
-				// if err := w.Flush(); err != nil {
-				// 	return NewResponse(Error, nil), err
-				// }
+				log.Println("PingCMD")
 				return []byte("pong"), nil
 			case CreateQueueCMD:
+				log.Println("CreateQueueCMD")
 				if err := app.CreateQueue(context.Background(), authField.accountIDString(), header.queueNameString()); err != nil {
 					return nil, err
 				}
@@ -144,31 +137,29 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 				log.Println("list queue cmd")
 				return nil, nil
 			case DeleteQueueCMD:
+				log.Println("DeleteQueueCMD")
 				if err := app.DeleteQueue(context.Background(), authField.accountIDString(), header.queueNameString()); err != nil {
 					return nil, err
 				}
 				return nil, nil
 			case PublishCMD:
-				// TODO: io.ReadAll は使えないかもしれないので要確認
-				data, err := io.ReadAll(r)
+				log.Println("PublishCMD")
+				data := make([]byte, header.DataSize)
+				_, err := r.Read(data)
 				if err != nil {
 					return nil, err
 				}
 				fmt.Printf("data: %v\n", data)
 				return nil, app.Publish(context.Background(), authField.accountIDString(), header.queueNameString(), data)
 			case ConsumeCMD:
+				log.Println("ConsumeCMD")
 				m, err := app.Consume(context.Background(), authField.accountIDString(), header.queueNameString())
 				if err != nil {
 					return nil, err
 				}
-				if _, err := w.Write(m.Bytes()); err != nil {
-					return nil, err
-				}
-				if err := w.Flush(); err != nil {
-					return nil, err
-				}
 				return m.Bytes(), nil
 			case DeleteCMD:
+				log.Println("DeleteCMD")
 				var id MessageID
 				_, err := r.Read(id[:])
 				if err != nil && err != io.EOF {
@@ -176,6 +167,7 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 				}
 				return nil, app.Delete(context.Background(), authField.accountIDString(), string(header.QueueName[:]), string(id[:]))
 			default:
+				log.Println("invalid cmd")
 				if header.isBlank() {
 					return nil, nil
 				}
@@ -227,8 +219,9 @@ const (
 	queueNameStrSize = 128
 	ByteSizeOfRune   = 4
 	headerFieldSize  = accountIDStrSize*ByteSizeOfRune +
+		1 + // Command field size
 		queueNameStrSize*ByteSizeOfRune +
-		1 // Command field size
+		8 // data size field
 )
 
 func init() {
@@ -240,6 +233,7 @@ type HeaderField struct {
 	SessionID SessionID
 	Command   uint8
 	QueueName [128]rune
+	DataSize  uint64
 }
 
 // String implements of fmt.Stringer
@@ -263,7 +257,7 @@ func (h HeaderField) queueNameString() string {
 type MessageID [src.MessageIDSize]byte
 
 // read ...
-func read[T any](r io.Reader, bufSize int) (T, error) {
+func read[T any](r io.Reader, bufSize uint64) (T, error) {
 	var v T
 	buf := make([]byte, bufSize)
 	received, err := r.Read(buf)
@@ -349,7 +343,7 @@ func (a AuthField) passwordString() string {
 type Response struct {
 	HeaderField struct {
 		Result   uint8
-		DataSize uint32
+		DataSize uint64
 	}
 	Data []byte
 }
@@ -358,7 +352,7 @@ type Response struct {
 func NewResponse(result uint8, data []byte) Response {
 	res := Response{}
 	res.HeaderField.Result = result
-	res.HeaderField.DataSize = uint32(len(data))
+	res.HeaderField.DataSize = uint64(len(data))
 	res.Data = data
 	return res
 }

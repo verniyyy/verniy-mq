@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/verniyyy/verniy-mq/src"
 	"github.com/verniyyy/verniy-mq/src/util"
@@ -165,7 +166,9 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 				if err != nil && err != io.EOF {
 					return nil, err
 				}
-				return nil, app.Delete(context.Background(), authField.accountIDString(), string(header.QueueName[:]), string(id[:]))
+
+				log.Printf("delete message id: %v\n", string(id[:]))
+				return nil, app.Delete(context.Background(), authField.accountIDString(), header.queueNameString(), string(id[:]))
 			default:
 				log.Println("invalid cmd")
 				if header.isBlank() {
@@ -250,7 +253,7 @@ func (h HeaderField) isBlank() bool {
 
 // queueNameString ...
 func (h HeaderField) queueNameString() string {
-	return string(h.QueueName[:])
+	return strings.Replace(string(h.QueueName[:]), "\x00", "", -1)
 }
 
 // MessageID ...

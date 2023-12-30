@@ -1,6 +1,8 @@
 package src
 
-import "time"
+import (
+	"time"
+)
 
 // MessageQueue ...
 type MessageQueue interface {
@@ -76,5 +78,6 @@ func (mq *messageQueue) makeAvailable(id string) error {
 
 // Delete ...
 func (mq *messageQueue) Delete(id string) error {
-	return mq.kv.Delete(id)
+	_, err := mq.kv.GetAndDelete(id)
+	return err
 }

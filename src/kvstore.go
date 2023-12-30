@@ -73,7 +73,7 @@ func (s *kvStore[K, V]) GetAll() ([]K, []V, error) {
 func (s *kvStore[K, V]) GetAndDelete(k K) (V, error) {
 	v, ok := s.sm.LoadAndDelete(k)
 	if !ok {
-		return v.(V), ErrNotFound
+		return *new(V), ErrNotFound
 	}
 
 	return v.(V), nil

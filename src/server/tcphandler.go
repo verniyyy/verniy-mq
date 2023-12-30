@@ -143,8 +143,12 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 				}
 				return nil, nil
 			case ListQueueCMD:
-				log.Println("list queue cmd")
-				return nil, nil
+				log.Println("ListQueueCMD")
+				out, err := app.ListQueues(context.Background(), authField.accountIDString())
+				if err != nil {
+					return nil, err
+				}
+				return out.EncodeJSON()
 			case DeleteQueueCMD:
 				log.Println("DeleteQueueCMD")
 				if err := app.DeleteQueue(context.Background(), authField.accountIDString(), header.queueNameString()); err != nil {

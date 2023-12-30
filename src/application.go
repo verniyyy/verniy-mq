@@ -2,6 +2,7 @@ package src
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/verniyyy/verniy-mq/src/util"
 )
@@ -31,17 +32,21 @@ func (a MessageQueueApplication) ListQueues(ctx context.Context, userID string) 
 	}
 
 	out := ListQueuesOutput{
-		Queues: make([]struct{ name string }, len(mqList)),
+		Queues: make([]string, len(mqList)),
 	}
 	for i, q := range mqList {
-		out.Queues[i].name = q.Name()
+		out.Queues[i] = q.Name()
 	}
 
 	return out, nil
 }
 
 type ListQueuesOutput struct {
-	Queues []struct{ name string } `json:"queues"`
+	Queues []string `json:"queues"`
+}
+
+func (o ListQueuesOutput) EncodeJSON() ([]byte, error) {
+	return json.Marshal(o)
 }
 
 // DeleteQueue ...

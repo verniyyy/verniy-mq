@@ -46,9 +46,6 @@ func (mq *messageQueue) Consume() (*Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !m.IsEmpty() {
-		return nil, nil
-	}
 
 	if err := mq.kv.Store(m.ID, m); err != nil {
 		return nil, err

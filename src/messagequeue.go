@@ -1,6 +1,7 @@
 package src
 
 import (
+	"log"
 	"time"
 )
 
@@ -69,6 +70,9 @@ func (mq *messageQueue) makeAvailable(id string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		log.Printf("makeAvailable: %+v\n", id)
+	}()
 
 	return mq.q.Enqueue(m)
 }

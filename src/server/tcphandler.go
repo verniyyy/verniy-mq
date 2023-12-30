@@ -114,6 +114,14 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 			log.Println("session id mismatch")
 			log.Printf("header.sessionIDString(): %p\n", []byte(header.String()))
 			log.Printf("sessID.String(): %p\n", []byte(sessID.String()))
+			res, err := NewResponse(Error, []byte("session timeout")).encode()
+			if err != nil {
+				log.Printf("error: %v\n", err)
+			}
+
+			if _, err := writeWithFlush(w, res); err != nil {
+				log.Printf("error: %v\n", err)
+			}
 			break
 		}
 		if header.Command == QuitCMD {
@@ -373,11 +381,13 @@ func NewResponse(result uint8, data []byte) Response {
 // encode ...
 func (res Response) encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	binary.Write(
+	if err := binary.Write(
 		buf,
 		binary.BigEndian,
 		res.HeaderField,
-	)
+	); err != nil {
+		return []byte{}, err
+	}
 	if res.Data == nil {
 		return buf.Bytes(), nil
 	}

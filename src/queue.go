@@ -2,6 +2,7 @@ package src
 
 import (
 	"container/list"
+	"errors"
 	"sync"
 )
 
@@ -52,7 +53,13 @@ func (q *queue[T]) Enqueue(v T) error {
 // Dequeue ...
 func (q *queue[T]) Dequeue() (T, error) {
 	q.m.Lock()
+	defer q.m.Unlock()
+
 	e := q.l.Front()
-	q.m.Unlock()
-	return e.Value.(T), nil
+	if e == nil {
+		return *new(T), errors.New("queue is empty")
+	}
+
+	v := q.l.Remove(e)
+	return v.(T), nil
 }

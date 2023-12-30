@@ -17,11 +17,6 @@ func NewMessage(rs RandomStringer, data []byte) (*Message, error) {
 // RandomStringer ...
 type RandomStringer func() string
 
-// IsEmpty ...
-func (m Message) IsEmpty() bool {
-	return m.Data == nil
-}
-
 // Bytes ...
 func (m Message) Bytes() []byte {
 	const headerSize = MessageIDSize

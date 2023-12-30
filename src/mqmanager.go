@@ -1,8 +1,7 @@
 package src
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
 )
 
@@ -28,9 +27,14 @@ type mqManager struct {
 
 // CreateQueue ...
 func (m *mqManager) CreateQueue(userID, name string) error {
-	id, err := newQueueID(userID, name)
-	if err != nil {
+	id := encodeQueueID(userID, name)
+
+	_, err := m.mqList.Get(id)
+	if err != nil && err != ErrNotFound {
 		return err
+	}
+	if err == nil {
+		return fmt.Errorf("queue name \"%s\" is already stored", name)
 	}
 
 	return m.mqList.Store(id, NewMessageQueue(name))
@@ -38,12 +42,13 @@ func (m *mqManager) CreateQueue(userID, name string) error {
 
 // GetQueue ...
 func (m *mqManager) GetQueue(userID, name string) (MessageQueue, error) {
-	id, err := newQueueID(userID, name)
-	if err != nil {
-		return nil, err
+	id := encodeQueueID(userID, name)
+	q, err := m.mqList.Get(id)
+	if err != nil && err == ErrNotFound {
+		return nil, fmt.Errorf("queue name \"%s\" is not found", name)
 	}
 
-	return m.mqList.Get(id)
+	return q, nil
 }
 
 // ListQueues ...
@@ -77,35 +82,29 @@ func (m *mqManager) ListQueues(userID string) ([]MessageQueue, error) {
 
 // DeleteQueue ...
 func (m *mqManager) DeleteQueue(userID, name string) error {
-	id, err := newQueueID(userID, name)
-	if err != nil {
-		return err
+	id := encodeQueueID(userID, name)
+	if _, err := m.mqList.Get(id); err != nil {
+		return fmt.Errorf("queue name \"%s\" is not found", name)
 	}
 
 	return m.mqList.Delete(id)
 }
 
 // queueID ...
-type queueID *[]byte
+type queueID string
 
-// newQueueID ...
-func newQueueID(userID, name string) (queueID, error) {
-	buf := bytes.NewBuffer(nil)
-	if err := gob.NewEncoder(buf).Encode(map[string]string{
-		"userID": userID,
-		"name":   name,
-	}); err != nil {
-		return nil, err
-	}
+const queueIDEncodeFmt = "{\"userID\":\"%v\",\"name\":\"%v\"}"
 
-	bufBytes := buf.Bytes()
-	return queueID(&bufBytes), nil
+// encodeQueueID ...
+func encodeQueueID(userID, name string) queueID {
+	return queueID(fmt.Sprintf(queueIDEncodeFmt, userID, name))
 }
 
 // decodeQueueID ...
 func decodeQueueID(id queueID) (userID, name string, err error) {
 	v := make(map[string]string)
-	if err := gob.NewDecoder(bytes.NewBuffer(*id)).Decode(&v); err != nil {
+	if err := json.Unmarshal([]byte(id), &v); err != nil {
+		fmt.Printf("err: %v\n", err.Error())
 		return "", "", err
 	}
 

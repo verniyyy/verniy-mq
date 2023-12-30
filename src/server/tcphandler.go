@@ -189,15 +189,25 @@ func (h tcpHandler) HandleRequest(conn net.Conn) {
 			continue
 		}
 
-		n, err := w.Write(res)
+		n, err := writeWithFlush(w, res)
 		if err != nil {
 			log.Printf("error: %v\n", err)
 		}
-		if err := w.Flush(); err != nil {
-			log.Println(err)
-		}
 		log.Printf("response write n: %v\n", n)
 	}
+}
+
+type bufWriter interface {
+	Write([]byte) (int, error)
+	Flush() error
+}
+
+func writeWithFlush(w bufWriter, p []byte) (int, error) {
+	n, err := w.Write(p)
+	if err := w.Flush(); err != nil {
+		return n, err
+	}
+	return n, err
 }
 
 // SessionID ...

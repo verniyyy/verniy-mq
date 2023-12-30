@@ -23,6 +23,9 @@ func (m Message) Bytes() []byte {
 
 	headerBuf := [headerSize]byte{}
 	copy(headerBuf[0:], []byte(m.ID))
+	if m.Data == nil {
+		return headerBuf[:]
+	}
 
 	return append(headerBuf[:], m.Data...)
 }
